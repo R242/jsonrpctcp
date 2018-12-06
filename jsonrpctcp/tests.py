@@ -24,7 +24,6 @@ import logging
 CLIENT = connect('127.0.0.1', 8000)
 
 class TestCompatibility(unittest.TestCase):
-    
     def setUp(self):
         pass 
         

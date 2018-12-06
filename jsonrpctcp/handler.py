@@ -3,17 +3,18 @@ The Handler class, which can be nested. This should be attached to a
 Server instance.
 """
 
+
 class Handler(object):
     """
     A simple object that should be populated with methods that handle
     the arguments. Should need little interaction with the JSONRequest
     or Server instance.
     """
-    
+
     def __init__(self, request):
         self.request = request
         self.__handlers = None
-        
+
     client_address = None
 
     @property

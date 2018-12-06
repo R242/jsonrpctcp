@@ -7,20 +7,23 @@ import threading
 import socket
 import time
 import sys
-import types
 import traceback
+
+import six
+
 from jsonrpctcp.handler import Handler
 from jsonrpctcp import config
 from jsonrpctcp import logger
 from jsonrpctcp import history
 from jsonrpctcp.errors import ProtocolError
-from jsonrpctcp.errors import JSONRPC_ERRORS, EncryptionMissing
+from jsonrpctcp.errors import EncryptionMissing
 from inspect import isclass
 
 try:
     import json
 except ImportError:
     import simplejson as json
+
 
 class Server(object):
     """
@@ -43,9 +46,9 @@ class Server(object):
         self.json_request = JSONRequest(self)
         if handler:
             assert hasattr(handler, '__call__') or \
-                issubclass(handler, Handler)
+                   issubclass(handler, Handler)
             self.json_request.add_handler(handler)
-        
+
     def serve(self):
         """
         This starts the server -- it blocks, so if there are other
@@ -57,12 +60,12 @@ class Server(object):
         self.socket.bind(self.addr)
         self.socket.listen(config.max_queue)
         self.wait()
-        
+
     def wait(self):
         """ The principle wait cycle. """
         while True:
             if self._shutdown:
-                break            
+                break
             clientsock, addr = self.socket.accept()
             args = (clientsock, addr)
             target = self.json_request.process
@@ -71,7 +74,7 @@ class Server(object):
             thread.start()
             self.threads.append(thread)
             self.check_threads()
-            
+
         sys.stdout.write('Shutting down...')
         for thread in self.threads:
             thread.join()
@@ -84,7 +87,7 @@ class Server(object):
         """
         self._shutdown = True
         self.socket.close()
-        
+
     def check_threads(self):
         """
         Check the thread list for dead threads and finished
@@ -94,11 +97,12 @@ class Server(object):
             if not thread.isAlive():
                 thread.join()
                 self.threads.remove(thread)
-    
+
     def add_handler(self, method, name=None):
         """ Just a wrapper around JSONRequest.add_handler """
         self.json_request.add_handler(method, name)
-            
+
+
 class JSONRequest(object):
     """
     This is the class that handles individual requests passed
@@ -127,18 +131,17 @@ class JSONRequest(object):
                 name = method.__name__
             assert hasattr(method, '__call__')
             self.handlers[name] = method
-            
+
     def get_handler(self, name):
         """ Check for an attached handler and return it. """
-        if self.handlers.has_key(name):
-            return self.handlers[name]
-        return None
-                
+        return self.handlers.get(name)
+
     def process(self, sock, addr):
         """ Just a wrapper for ProcessRequest. """
         request = ProcessRequest(self)
         request.process(sock, addr)
-        
+
+
 class ProcessRequest(object):
     """
     This is the class that handles an actual request, passing it through
@@ -151,7 +154,7 @@ class ProcessRequest(object):
         self.json_request = json_request
         self.socket = None
         self.client_address = None
-        
+
     def process(self, sock, addr):
         """
         Retrieves the data stream from the socket and validates it.
@@ -162,10 +165,10 @@ class ProcessRequest(object):
         requestlines = []
         while True:
             data = self.get_data()
-            if not data: 
+            if not data:
                 break
             requestlines.append(data)
-            if len(data) < config.buffer: 
+            if len(data) < config.buffer:
                 break
         request = ''.join(requestlines)
         response = ''
@@ -190,7 +193,7 @@ class ProcessRequest(object):
             if config.secret:
                 length = config.crypt_chunk_size
                 pad_length = length - (len(response) % length)
-                response = crypt.encrypt('%s%s' % (response, ' '*pad_length))
+                response = crypt.encrypt('%s%s' % (response, ' ' * pad_length))
             self.socket.send(response)
         self.socket.close()
 
@@ -206,7 +209,7 @@ class ProcessRequest(object):
             self.socket_error = True
             data = None
         return data
-        
+
     def parse_request(self, data):
         """ Attempts to load the request, validates it, and calls it. """
         try:
@@ -218,18 +221,17 @@ class ProcessRequest(object):
         batch = True
         if type(obj) is not list:
             batch = False
-            obj = [obj,]
+            obj = [obj, ]
         responses = []
         for req in obj:
             request_error = ProtocolError(-32600)
             if type(req) is not dict:
                 responses.append(request_error.generate_error())
-            elif 'method' not in req.keys() or \
-                type(req['method']) not in types.StringTypes:
+            elif 'method' not in req.keys() or type(req['method']) not in six.string_types:
                 responses.append(request_error.generate_error())
             else:
                 result = self.parse_call(req)
-                if req.has_key('id'):
+                if 'id' in req:
                     response = generate_response(result, id=req.get('id'))
                     responses.append(response)
         if not responses:
@@ -241,27 +243,27 @@ class ProcessRequest(object):
                 # Single request
                 responses = responses[0]
             return json.dumps(responses)
-        
+
     def parse_call(self, obj):
         """
         Parses a JSON request.
         """
-            
+
         # Get ID, Notification if None
         # This is actually incorrect, as IDs can be null by spec (rare)
         request_id = obj.get('id', None)
-        
+
         # Check for required parameters
         jsonrpc = obj.get('jsonrpc', None)
         method = obj.get('method', None)
         if not jsonrpc or not method:
             return ProtocolError(-32600)
-        
+
         # Validate parameters
         params = obj.get('params', [])
         if type(params) not in (list, dict):
             return ProtocolError(-32602)
-        
+
         # Parse Request
         kwargs = {}
         if type(params) is dict:
@@ -281,7 +283,8 @@ class ProcessRequest(object):
         else:
             error_code = -32601
         return ProtocolError(error_code, message=message)
-            
+
+
 def generate_response(result, **kwargs):
     """
     TODO: Fix so that a request_id can be Null and not a Notification.
@@ -289,10 +292,11 @@ def generate_response(result, **kwargs):
     if type(result) is ProtocolError:
         return result.generate_error(**kwargs)
     else:
-        response = {'jsonrpc':"2.0", "result":result}
+        response = {'jsonrpc': "2.0", "result": result}
         response.update(kwargs)
         return response
-        
+
+
 def start_server(host, port, handler):
     """
     Wrapper around Server that pre-threads it.
@@ -303,30 +307,31 @@ def start_server(host, port, handler):
     server_thread.daemon = True
     server_thread.start()
     return server
-    
+
+
 def test_server():
     """
     Creates a simple server to be tested against the test_client in
     the client module.
     """
-    
+
     host, port = '', 8080
-    
+
     def echo(message):
         """
         Test method, an example of how simple it *should* be.
         """
         return message
-        
+
     def summation(*args):
         return sum(args)
-        
+
     if '-v' in sys.argv:
         import logging
         config.verbose = True
         logger.addHandler(logging.StreamHandler())
         logger.setLevel(logging.DEBUG)
-        
+
     server = Server((host, port))
     server.add_handler(echo)
     server.add_handler(echo, 'tree.echo')
@@ -334,16 +339,16 @@ def test_server():
     server_thread = threading.Thread(target=server.serve)
     server_thread.daemon = True
     server_thread.start()
-    
-    print "Server running: %s:%s" % (host, port)
-    
+
+    six.print_("Server running: %s:%s" % (host, port))
+
     try:
         while True:
             time.sleep(0.5)
     except KeyboardInterrupt:
-        print 'Finished.'
+        six.print_('Finished.')
         sys.exit()
-    
-    
+
+
 if __name__ == "__main__":
     test_server()

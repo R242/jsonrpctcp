@@ -2,14 +2,16 @@
 This is just the simple config class and singleton for the
 JSONRPCTCP library.
 """
-   
-from ConfigParser import ConfigParser 
+
+from six.moves import configparser
+
 CONFIG_SECTION = 'jsonrpctcp'
 # For encrypting / decrypting the data on keyed connections.
 try:
     from Crypto.Cipher import AES
 except:
     AES = None
+
 
 class Config(object):
     """ Simple object to hold jsonrpctcp configuration options """
@@ -41,7 +43,7 @@ class Config(object):
         
     def load(self, path):
         """ Loads settings from a configuration file. """
-        conf = ConfigParser()
+        conf = configparser.ConfigParser()
         conf.read(path)
         if not conf.has_section(CONFIG_SECTION):
             return

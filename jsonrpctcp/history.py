@@ -1,5 +1,6 @@
 from jsonrpctcp import logger
 
+
 class History(object):
     """
     This holds the response and request objects for a session.
